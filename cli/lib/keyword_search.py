@@ -8,10 +8,9 @@ def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
     results = []
 
     for movie in movies:
-        pre_query = preprocess_text(query)
-        pre_title = preprocess_text(movie["title"])
-
-        if pre_query in pre_title:
+        query_tokens = tokenize_text(query)
+        title_tokens = tokenize_text(movie["title"])
+        if has_matching_token(query_tokens, title_tokens):
             results.append(movie)
             if len(results) >= limit:
                 break
@@ -19,7 +18,22 @@ def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
     return results
 
 
+def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
+    for query_token in query_tokens:
+        for title_token in title_tokens:
+            if query_token in title_token:
+                return True
+    return False
+
+
 def preprocess_text(text: str) -> str:
     text = text.lower()
     text = text.translate(str.maketrans("", "", string.punctuation))
-    return text
+    return text  # noqa: RET504
+
+
+def tokenize_text(text: str) -> list[str]:
+    text = preprocess_text(text)
+    tokens = text.split()
+    valid_tokens = [token for token in tokens if token]
+    return valid_tokens  # noqa: RET504
