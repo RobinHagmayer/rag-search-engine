@@ -96,6 +96,18 @@ class InvertedIndex:
 
         return self.term_frequencies.get(doc_id).get(token)  # ty: ignore[invalid-return-type, possibly-missing-attribute]
 
+    def get_tfidf(self, doc_id: int, term: str) -> float:
+        token_list = tokenize_text(term)
+        if len(token_list) != 1:
+            msg = "Can only get term frequency for one token"
+            raise InvertedIndexTermFrequenciesError(msg)
+        token = token_list[0]
+
+        tf = self.get_tf(doc_id, token)
+        idf = self.get_idf(token)
+
+        return tf * idf
+
     def __add_document(self, doc_id: int, text: str) -> None:
         token_list = tokenize_text(text)
         self.term_frequencies[doc_id].update(token_list)  # ty:ignore[possibly-missing-attribute]
@@ -161,6 +173,17 @@ def idf_command(term: str) -> float:
         sys.exit(f"Error loading the index: {e}")
 
     return idx.get_idf(term)
+
+
+def tfidf_command(doc_id: int, term: str) -> float:
+    idx = InvertedIndex()
+
+    try:
+        idx.load()
+    except InvertedIndexLoadError as e:
+        sys.exit(f"Error loading the index: {e}")
+
+    return idx.get_tfidf(doc_id, term)
 
 
 def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
