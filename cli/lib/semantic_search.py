@@ -10,8 +10,38 @@ class SemanticSearch:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
         self.model = SentenceTransformer(model_name)
         self.embeddings = None
-        self.documents = None
+        self.documents: list[dict] = None
         self.documents_map = {}
+
+    def search(self, query: str, limit: int) -> list[dict]:
+        if self.embeddings is None or self.embeddings.size == 0:
+            msg = "No embeddings loaded. Call `load_or_create_embeddings` first."
+            raise ValueError(msg)
+
+        if self.documents is None or len(self.documents) == 0:
+            msg = "No documents loaded. Call `load_or_create_embeddings` first."
+            raise ValueError(msg)
+
+        query_embedding = self.generate_embedding(query)
+
+        similarities = []
+        for i, doc_embedding in enumerate(self.embeddings):
+            score = cosine_similarity(query_embedding, doc_embedding)
+            similarities.append((score, self.documents[i]))
+
+        similarities.sort(key=lambda item: item[0], reverse=True)
+
+        results = []
+        for score, doc in similarities[:limit]:
+            results.append(
+                {
+                    "score": score,
+                    "title": doc["title"],
+                    "description": doc["description"],
+                }
+            )
+
+        return results
 
     def load_or_create_embeddings(self, documents: list[dict]):  # noqa: ANN201
         self.documents = documents
@@ -42,7 +72,7 @@ class SemanticSearch:
 
         return self.embeddings
 
-    def generate_embedding(self, text: str) -> str:
+    def generate_embedding(self, text: str):  # noqa: ANN201
         if not text or not text.strip():
             msg = "'text' must be a valid non-empty string"
             raise ValueError(msg)
@@ -50,6 +80,24 @@ class SemanticSearch:
         embedding = self.model.encode([text])
 
         return embedding[0]
+
+
+def semantic_search(query: str, limit: int = 5) -> None:
+    search_instance = SemanticSearch()
+
+    movies = load_movies()
+    search_instance.load_or_create_embeddings(movies)
+
+    result_list = search_instance.search(query, limit)
+
+    print(f"Query: {query}")
+    print(f"Top {len(result_list)} results:")
+    print()
+
+    for i, result in enumerate(result_list, 1):
+        print(f"{i}. {result['title']} (score: {result['score']:.4f})")
+        print(f"   {result['description'][:100]}...")
+        print()
 
 
 def verify_model() -> None:
@@ -67,6 +115,27 @@ def verify_embeddings() -> None:
 
     print(f"Number of docs:   {len(movies)}")
     print(f"Embeddings shape: {embeddings.shape[0]} vectors in {embeddings.shape[1]} dimensions")
+
+
+def embed_query_text(query: str) -> None:
+    search_instance = SemanticSearch()
+
+    embedding = search_instance.generate_embedding(query)
+
+    print(f"Query: {query}")
+    print(f"First 5 dimensions: {embedding[:5]}")
+    print(f"Shape: {embedding.shape}")
+
+
+def cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
+    dot_product = np.dot(vec1, vec2)
+    norm1 = np.linalg.norm(vec1)
+    norm2 = np.linalg.norm(vec2)
+
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+
+    return dot_product / (norm1 * norm2)
 
 
 def embed_text(text: str) -> None:
