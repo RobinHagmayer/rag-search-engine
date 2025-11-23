@@ -4,7 +4,7 @@
 
 import argparse
 
-from lib.keyword_search import build_command, search_command, tf_command
+from lib.keyword_search import build_command, idf_command, search_command, tf_command
 
 
 def main() -> None:
@@ -12,6 +12,9 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     subparsers.add_parser("build", help="Build the inverted index and save it to disk")
+
+    tf_parser = subparsers.add_parser("idf", help="Get inverse document frequency for a given term")
+    tf_parser.add_argument("term", type=str, help="Term to get IDF for")
 
     search_parser = subparsers.add_parser("search", help="Search movies using BM25")
     search_parser.add_argument("query", type=str, help="Search query")
@@ -27,6 +30,9 @@ def main() -> None:
             print("Building the inverted index...")
             build_command()
             print("Inverted index built successfully.")
+        case "idf":
+            idf = idf_command(args.term)
+            print(f"Inverse document frequency of '{args.term}': {idf:.2f}")
         case "search":
             print(f"Searching for: {args.query}")
             results = search_command(args.query)

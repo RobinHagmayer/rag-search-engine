@@ -1,3 +1,4 @@
+import math
 import pickle
 import string
 import sys
@@ -70,6 +71,17 @@ class InvertedIndex:
     def get_documents(self, term: str) -> list[int]:
         return sorted(self.index.get(term, set()))
 
+    def get_idf(self, term: str) -> float:
+        term_list = tokenize_text(term)
+        if len(term_list) != 1:
+            raise ValueError
+
+        term = term_list[0]
+        doc_count = len(self.docmap.keys())
+        term_doc_count = len(self.index[term])
+
+        return math.log((doc_count + 1) / (term_doc_count + 1))
+
     def get_tf(self, doc_id: int, term: str) -> int:
         token_list = tokenize_text(term)
         if len(token_list) != 1:
@@ -138,6 +150,17 @@ def tf_command(doc_id: int, term: str) -> int:
         return 0
 
     return tf
+
+
+def idf_command(term: str) -> float:
+    idx = InvertedIndex()
+
+    try:
+        idx.load()
+    except InvertedIndexLoadError as e:
+        sys.exit(f"Error loading the index: {e}")
+
+    return idx.get_idf(term)
 
 
 def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
