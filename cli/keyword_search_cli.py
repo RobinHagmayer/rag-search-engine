@@ -17,7 +17,7 @@ from lib.keyword_search import (
 from lib.search_utils import BM25_B, BM25_K1
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901, PLR0915
     parser = argparse.ArgumentParser(description="Keyword Search CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
