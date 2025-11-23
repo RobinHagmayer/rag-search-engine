@@ -1,7 +1,7 @@
 import pickle
 import string
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 from nltk.stem import PorterStemmer
 
@@ -12,12 +12,18 @@ class InvertedIndexLoadError(Exception):
     pass
 
 
+class InvertedIndexTermFrequenciesError(Exception):
+    pass
+
+
 class InvertedIndex:
     def __init__(self) -> None:
         self.index = defaultdict(set)
         self.docmap: dict[int, dict] = {}
+        self.term_frequencies = defaultdict(Counter)
         self.index_path = CACHE_DIR / "index.pkl"
         self.docmap_path = CACHE_DIR / "docmap.pkl"
+        self.tf_path = CACHE_DIR / "term_frequencies.pkl"
 
     def build(self) -> None:
         movie_list = load_movies()
@@ -26,23 +32,6 @@ class InvertedIndex:
             doc_text = f"{movie['title']} {movie['description']}"
             self.docmap[doc_id] = movie
             self.__add_document(doc_id, doc_text)
-
-    def save(self) -> None:
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-        with self.index_path.open("wb") as f:
-            pickle.dump(self.index, f)
-
-        with self.docmap_path.open("wb") as f:
-            pickle.dump(self.docmap, f)
-
-    def get_documents(self, term: str) -> list[int]:
-        return sorted(self.index.get(term, set()))
-
-    def __add_document(self, doc_id: int, text: str) -> None:
-        token_list = tokenize_text(text)
-        for token in token_list:
-            self.index[token].add(doc_id)
 
     def load(self) -> None:
         try:
@@ -58,6 +47,48 @@ class InvertedIndex:
         except FileNotFoundError as e:
             msg = f"Docmap file not found: {self.docmap_path}"
             raise InvertedIndexLoadError(msg) from e
+
+        try:
+            with self.tf_path.open("rb") as f:
+                self.term_frequencies = pickle.load(f)  # noqa: S301
+        except FileNotFoundError as e:
+            msg = f"Term frequencies file not found: {self.tf_path}"
+            raise InvertedIndexLoadError(msg) from e
+
+    def save(self) -> None:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+        with self.index_path.open("wb") as f:
+            pickle.dump(self.index, f)
+
+        with self.docmap_path.open("wb") as f:
+            pickle.dump(self.docmap, f)
+
+        with self.tf_path.open("wb") as f:
+            pickle.dump(self.term_frequencies, f)
+
+    def get_documents(self, term: str) -> list[int]:
+        return sorted(self.index.get(term, set()))
+
+    def get_tf(self, doc_id: int, term: str) -> int:
+        token_list = tokenize_text(term)
+        if len(token_list) != 1:
+            msg = "Can only get term frequency for one token"
+            raise InvertedIndexTermFrequenciesError(msg)
+        token = token_list[0]
+
+        doc_id_list = self.index.get(token)
+        if doc_id not in doc_id_list:  # ty: ignore[unsupported-operator]
+            msg = "Term does not exist in given document id"
+            raise InvertedIndexTermFrequenciesError(msg)
+
+        return self.term_frequencies.get(doc_id).get(token)  # ty: ignore[invalid-return-type, possibly-missing-attribute]
+
+    def __add_document(self, doc_id: int, text: str) -> None:
+        token_list = tokenize_text(text)
+        self.term_frequencies[doc_id].update(token_list)  # ty:ignore[possibly-missing-attribute]
+        for token in token_list:
+            self.index[token].add(doc_id)
 
 
 def build_command() -> None:
@@ -90,6 +121,23 @@ def search_command(query: str, limit: int = DEFAULT_SEARCH_LIMIT) -> list[dict]:
             break
 
     return results
+
+
+def tf_command(doc_id: int, term: str) -> int:
+    idx = InvertedIndex()
+
+    try:
+        idx.load()
+    except InvertedIndexLoadError as e:
+        sys.exit(f"Error loading the index: {e}")
+
+    try:
+        tf = idx.get_tf(doc_id, term)
+    except InvertedIndexTermFrequenciesError as e:
+        print(f"Error getting term frequencies: {e}")  # noqa: T201
+        return 0
+
+    return tf
 
 
 def has_matching_token(query_tokens: list[str], title_tokens: list[str]) -> bool:
